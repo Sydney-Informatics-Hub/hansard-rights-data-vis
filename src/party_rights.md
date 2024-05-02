@@ -15,19 +15,35 @@ hansardRights.forEach((d) => {
 const party = view(Inputs.select(partySelection, {label: "Party"}));
 ```
 
+Set a minimum count filter below. Words that never have a count greater than the minimum for any year won't appear. Set to 0 for no minimum.
+```js
+const perYearCountMin = view(Inputs.text({label: "Per year count min", type: 'number', value: 0, min: 0, required: true}));
+```
+Set a maximum count filter below. Words that have at least one count greater than the maximum for any year won't appear. Leave blank for no limit.
+```js
+const perYearCountMax = view(Inputs.text({label: "Per year count max", type: 'number', value: '', min: 0, required: false}));
+```
+
 ```js
 const initialPartyFilter = hansardRights.filter(row => (row.party === party));
 const yearsCovered = [];
 hansardRights.forEach((d) => {
     if (!yearsCovered.includes(d.year)) yearsCovered.push(d.year);
 });
-const wordList = [];
+const includeList = [];
+const overThresholdWords = [];
 yearsCovered.forEach((year) => {
     var sorted = d3.sort(initialPartyFilter.filter(row => (row.year === year)), (d) => d.count);
-    sorted.slice(-5).forEach((d) => {
-        if (!wordList.includes(d.word) && (d.word !== 'human') && (d.count > 1)) wordList.push(d.word);
+    sorted.forEach((d) => {
+        if (!includeList.includes(d.word) && (d.word !== 'human') && (d.count >= perYearCountMin)) includeList.push(d.word);
+        if ((perYearCountMax != '') && !overThresholdWords.includes(d.word) && (d.count > perYearCountMax)) overThresholdWords.push(d.word);
     });
 });
+const wordList = [];
+includeList.forEach((word) => {
+    if (!overThresholdWords.includes(word)) wordList.push(word);
+});
+
 const hansardRightsFiltered = initialPartyFilter.filter(row => (wordList.includes(row.word)));
 const hansardHumanRights = initialPartyFilter.filter(row => (row.word === "human"));
 ```
@@ -35,7 +51,7 @@ const hansardHumanRights = initialPartyFilter.filter(row => (row.word === "human
 ```js
 const rightsComparisonPartyPlot = Plot.plot({
     title: `Type of rights mentions by the ${party} party`,
-    subtitle: "Types of rights mentioned over time, sorted by first mention. Rights are listed only if they are in the top 5 by count and have a count of more than 1 for at least one year",
+    subtitle: "Types of rights mentioned over time, sorted by first mention",
     height: d3.max([40 + new Set(hansardRightsFiltered.map(d => d.word)).size * 20, 600]),
     width,
     marginBottom: 100,
