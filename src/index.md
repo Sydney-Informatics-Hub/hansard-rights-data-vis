@@ -7,8 +7,8 @@ theme: ["cotton", "wide"]
 ```js
 const hansardRightsFile = FileAttachment("./data/hansard_rights.csv");
 const timePeriodsFile = FileAttachment("./data/time_periods.csv");
-const coerceHansardRow = (d) => ({"date": d.date, "party": (d.party === null ? "N/A" : d.party.toString()), "rights": (d.rights === null ? "" : d.rights.toString())});
-const hansardRights = hansardRightsFile.csv({typed: true}).then((D) => D.map(coerceHansardRow));
+const coerceHansardRow = (d) => ({"date": d.date, "party": (d.party === null ? "N/A" : d.party.toString()), "rights": (d.rights === null ? "" : d.rights.toString()), "context": (d.context === null ? "" : d.context.toString())});
+const hansardRights = hansardRightsFile.csv({typed: true}).then((D) => D.map(coerceHansardRow));    
 const defaultTimePeriods = timePeriodsFile.csv({typed: true});
 ```
 
@@ -24,21 +24,6 @@ for (let row of hansardRights) {
     if (row.date > latestDate) latestDate = new Date(row.date.valueOf());
 }
 ```
-
-
-
-<div class="card">
-
-<p>The hansard data presented on this page can be downloaded <a id="hansardDataLink" download>here</a></p>
-
-```js
-const hansardURL = await hansardRightsFile.url();
-
-document.getElementById("hansardDataLink").href = hansardURL;
-document.getElementById("hansardDataLink").download = "hansard_rights.csv";
-```
-
-</div>
 
 <div class="card" >
 
@@ -223,6 +208,28 @@ display(Plot.plot({
         Plot.lineY(hansardCounts, Plot.windowY({ k: windowK, reduce: meanSumToggle, x: "date", y: "count", stroke: "party", tip: true }))
     ]
 }));
+```
+
+</div>
+
+
+
+
+<div class="card">
+
+<h2>Browse and download the data</h2>
+
+<p>The hansard data presented on this page can be downloaded <a id="hansardDataLink" download>here</a></p>
+
+```js
+const hansardURL = await hansardRightsFile.url();
+
+document.getElementById("hansardDataLink").href = hansardURL;
+document.getElementById("hansardDataLink").download = "hansard_rights.csv";
+```
+
+```js
+display(Inputs.table(hansardRights, {width: {"date": 10, "party": 10, "rights": 50, "context": 200}}));
 ```
 
 </div>
