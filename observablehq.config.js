@@ -6,10 +6,11 @@ export default {
   // The pages and sections in the sidebar. If you don’t specify this option,
   // all pages will be listed in alphabetical order. Listing pages explicitly
   // lets you organize them into sections and have unlisted pages.
-  pages: [
-    {name: "Overview of all parties", path: ""},
-    {name: "Rights by party", path: "party_rights"},
-  ],
+  // pages: [
+  //   {name: "Overview of all parties", path: ""},
+  //   {name: "Rights by party", path: "party_rights"},
+  //   {name: "Types of rights", path: "types_of_rights"},
+  // ],
 
   // The path to the source root.
   root: "src",
