@@ -72,10 +72,25 @@ const words = view(wordsInput);
 const party = view(Inputs.select(partySelection, {label: "Party"}));
 ```
 
+Set a minimum count filter below. Rights that have a count lower than the set number within the date range won't appear
 ```js
-const hansardRightsFiltered = [];
+const minCount = view(Inputs.text({label: "Minimum count", type: 'number', value: 20, min: 0, required: true, submit: true}));
+```
+
+```js
+const hansardRightsDateFiltered = [];
 for (let row of hansardRights) {
-    if ((words.includes(row.rights)) && ((party === 'All parties') || (row.party === party)) && (new Date(row.date) >= startDate) && (new Date(row.date) <= endDate)) {
+    if ((words.includes(row.rights)) && ((party === 'All parties') || (row.party === party)) && (new Date(row.date) >= startDate) && (new Date(row.date <= endDate))) {
+        hansardRightsDateFiltered.push(row);
+    }
+}
+const rightsCountMap = new Map();
+const hansardRightsFiltered = [];
+for (let row of hansardRightsDateFiltered) {
+    if (!rightsCountMap.has(row.rights)) {
+        rightsCountMap.set(row.rights, hansardRightsDateFiltered.filter(d => (d.rights === row.rights)).length);
+    }
+    if (rightsCountMap.get(row.rights) >= minCount) {
         hansardRightsFiltered.push(row);
     }
 }
@@ -100,9 +115,15 @@ function stringToColour(str) {
 ```
 
 ```js
+const numRightsMentions = hansardRightsFiltered.length;
+const numRightsTotal = new Set(hansardRightsFiltered.map(d => d.rights)).size;
+```
+
+```js
 display(Plot.plot({
-    subtitle: `Types of rights mentioned by ${party.toLowerCase()} between ${startDate.toDateString()} and ${endDate.toDateString()}`,
-    height: 40 + new Set(hansardRightsFiltered.map(d => d.rights)).size * 20,
+    title: `Types of rights mentioned by ${party.toLowerCase()} between ${startDate.toDateString()} and ${endDate.toDateString()}`,
+    subtitle: `Total rights mentions: ${numRightsMentions}`,
+    height: 40 + numRightsTotal * 20,
     width: width,
     marginLeft: 100,
     marginRight: 40,
@@ -114,7 +135,7 @@ display(Plot.plot({
         scheme: "Tableau10"
     },
     marks: [
-        Plot.barX(hansardRightsFiltered, Plot.groupY({ x: "count" }, { y: "rights", fill: (d) => stringToColour(d.rights), sort: { y: "x", reverse: true } })),
+            Plot.barX(hansardRightsFiltered, Plot.groupY({ x: "count" }, { y: "rights", fill: (d) => stringToColour(d.rights), sort: { y: "x", reverse: true } })),
         Plot.text(hansardRightsFiltered, Plot.groupY({ x: "count", text: "count" }, { y: "rights", sort: { y: "x", reverse: true }, frameAnchor: "left", dx: 3 }))
     ]
 }));
