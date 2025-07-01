@@ -7,7 +7,7 @@ theme: ["cotton", "wide"]
 ```js
 const hansardRightsFile = FileAttachment("./data/hansard_rights.csv");
 const timePeriodsFile = FileAttachment("./data/time_periods.csv");
-const coerceHansardRow = (d) => ({"date": d.date, "party": (d.party === null ? "N/A" : d.party.toString()), "rights": (d.rights === null ? "" : d.rights.toString()), "context": (d.context === null ? "" : d.context.toString())});
+const coerceHansardRow = (d) => ({"date": d.date, "party": (d.party === null ? "N/A" : d.party.toString()), "speaker": (d.speaker === null ? "N/A" : d.speaker.toString()), "rights": (d.rights === null ? "" : d.rights.toString()), "context": (d.context === null ? "" : d.context.toString())});
 const hansardRights = hansardRightsFile.csv({typed: true}).then((D) => D.map(coerceHansardRow));    
 const defaultTimePeriods = timePeriodsFile.csv({typed: true});
 ```
@@ -161,6 +161,7 @@ function padInt(intValue, numPadChars) {
 }
 
 const countMap = new Map();
+const speakerSetMap = new Map();
 let entryDate;
 let formattedDate;
 let currKey;
@@ -170,6 +171,7 @@ for (let currParty of partySelection) {
         let formattedDate = `${padInt(entryDate.getUTCFullYear(), 4)}-${padInt(entryDate.getMonth()+1, 2)}-${padInt(entryDate.getDate(), 2)}`
         currKey = `${formattedDate}:${currParty}`;
         countMap.set(currKey, 0);
+        speakerSetMap.set(currKey, new Set());
         entryDate.setDate(entryDate.getDate() + 1);
     }
 }
@@ -181,6 +183,10 @@ for (let row of hansardRightsSingleWord) {
     } else {
         countMap.set(currKey, 1);
     }
+    if (!speakerSetMap.has(currKey)) {
+        speakerSetMap.set(currKey, new Set());
+    }
+    speakerSetMap.get(currKey).add(row.speaker);
 }
 
 const hansardCounts = [];
@@ -197,6 +203,16 @@ for (const [key, value] of countMap) {
     currParty = key.split(":").at(1);
     rowObj = {date: currDateStr, party: currParty, count: value};
     hansardCounts.push(rowObj);
+}
+
+const speakerCounts = [];
+for (const [key, speakerSet] of speakerSetMap.entries()) {
+  const [dateStr, party] = key.split(":");
+  speakerCounts.push({
+    date: new Date(dateStr),
+    party: party,
+    count: speakerSet.size
+  });
 }
 ```
 
@@ -228,6 +244,55 @@ display(Plot.plot({
     marks: [
         Plot.lineY(hansardCounts, Plot.windowY({ k: windowK, reduce: meanSumToggle, x: "date", y: "count", stroke: "party", tip: true }))
     ]
+}));
+```
+
+```js
+display(Plot.plot({
+    title: `Number of speakers mentioned "${wordsSingle}" rights by party on a rolling ${windowK} day count`,
+    width: width,
+    x: {
+        type: "time",
+        grid: true
+    },
+    y: {
+        label: meanSumToggle
+    },
+    color: {
+        type: "categorical",
+        scheme: "Set2",
+        domain: activeParties,
+        legend: true
+    },
+    marks: [
+        Plot.lineY(hansardCounts, Plot.windowY({ k: windowK, reduce: meanSumToggle, x: "date", y: "count", stroke: "party", tip: true }))
+    ]
+}));
+```
+
+```js
+// Step 4: Plot the result
+display(Plot.plot({
+  title: `Unique speakers mentioning "${wordsSingle}" by party on a rolling ${windowK} day count`,
+  width: width,
+  x: { type: "time", grid: true },
+  y: { label: "Unique Speaker Count" },
+  color: {
+    type: "categorical",
+    scheme: "Set2",
+    domain: activeParties,
+    legend: true
+  },
+  marks: [
+    Plot.lineY(speakerCounts, Plot.windowY({
+      k: windowK,
+      reduce: "mean", // or "sum" depending on your toggle
+      x: "date",
+      y: "count",
+      stroke: "party",
+      tip: true
+    }))
+  ]
 }));
 ```
 
