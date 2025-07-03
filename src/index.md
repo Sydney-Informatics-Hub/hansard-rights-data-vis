@@ -7,8 +7,8 @@ theme: ["cotton", "wide"]
 ```js
 const hansardRightsFile = FileAttachment("./data/hansard_rights.csv");
 const timePeriodsFile = FileAttachment("./data/time_periods.csv");
-const coerceHansardRow = (d) => ({"date": d.date, "party": (d.party === null ? "N/A" : d.party.toString()), "rights": (d.rights === null ? "" : d.rights.toString()), "context": (d.context === null ? "" : d.context.toString())});
-const hansardRights = hansardRightsFile.csv({typed: true}).then((D) => D.map(coerceHansardRow));    
+const coerceHansardRow = (d) => ({"date": d.date, "party": (d.party === null ? "N/A" : d.party.toString()), "speaker": (d.speaker === null ? "N/A" : d.speaker.toString()), "rights": (d.rights === null ? "" : d.rights.toString()), "context": (d.context === null ? "" : d.context.toString())});
+const hansardRights = hansardRightsFile.csv({typed: true}).then((D) => D.map(coerceHansardRow)); 
 const defaultTimePeriods = timePeriodsFile.csv({typed: true});
 ```
 
@@ -161,6 +161,7 @@ function padInt(intValue, numPadChars) {
 }
 
 const countMap = new Map();
+const speakerSetMap = new Map();
 let entryDate;
 let formattedDate;
 let currKey;
@@ -168,8 +169,9 @@ for (let currParty of partySelection) {
     entryDate = new Date(earliestDate.valueOf());
     while (entryDate <= latestDate) {
         let formattedDate = `${padInt(entryDate.getUTCFullYear(), 4)}-${padInt(entryDate.getMonth()+1, 2)}-${padInt(entryDate.getDate(), 2)}`
-        currKey = `${formattedDate}:${currParty}`;
+        currKey = `${formattedDate}:${currParty}`; // Create keys of all dates-parties combination
         countMap.set(currKey, 0);
+        speakerSetMap.set(currKey, new Set());
         entryDate.setDate(entryDate.getDate() + 1);
     }
 }
@@ -181,6 +183,10 @@ for (let row of hansardRightsSingleWord) {
     } else {
         countMap.set(currKey, 1);
     }
+    if (!speakerSetMap.has(currKey)) {
+        speakerSetMap.set(currKey, new Set());
+    }
+    speakerSetMap.get(currKey).add(row.speaker);
 }
 
 const hansardCounts = [];
@@ -198,6 +204,30 @@ for (const [key, value] of countMap) {
     rowObj = {date: currDateStr, party: currParty, count: value};
     hansardCounts.push(rowObj);
 }
+
+const speakerPartyMap = new Map();
+const speakerCounts = [];
+for (const [key, speakerSet] of speakerSetMap.entries()) {
+  let currDateStr;
+  let currDate;
+  let currParty;
+  currDateStr = key.split(":").at(0);
+  currDate = new Date(currDateStr);
+  if ((currDate < startDate) || (currDate > endDate)) {
+    continue;
+  }
+  currParty = key.split(":").at(1);
+  speakerCounts.push({date: currDate, party: currParty, count: speakerSet.size});
+
+  if (!speakerPartyMap.has(currParty) && speakerSet.size > 0){
+        speakerPartyMap.set(currParty, new Set());
+    }
+    if (speakerPartyMap.has(currParty) && speakerSet.size > 0) {
+        for (const s of speakerSet){
+            speakerPartyMap.get(currParty).add(s);
+        }   
+    }
+}
 ```
 
 ```js
@@ -210,7 +240,7 @@ const meanSumToggle = view(Inputs.radio(["mean", "sum"], {label: "Rolling mean/r
 
 ```js
 display(Plot.plot({
-    title: `"${wordsSingle}" rights mentioned by party on a rolling ${windowK} day count`,
+    title: `"${wordsSingle}" rights mentioned by party on a rolling ${windowK} day count  during ${selectedTimePeriod.name}`,
     width: width,
     x: {
         type: "time",
@@ -229,6 +259,59 @@ display(Plot.plot({
         Plot.lineY(hansardCounts, Plot.windowY({ k: windowK, reduce: meanSumToggle, x: "date", y: "count", stroke: "party", tip: true }))
     ]
 }));
+```
+
+```js
+
+html`Number of unique speakers mentioned "${wordsSingle}" during ministry of ${selectedTimePeriod.name}
+    <pre>${Array.from(speakerPartyMap.entries())
+  .sort((a, b) => b[1].size - a[1].size) // descending by size
+  .map(([party, speakers]) =>
+    `${party.padEnd(20)} ${speakers.size.toString().padStart(3)} unique speakers`
+  ).join("\n")}</pre>`
+```
+
+```js
+// Step 4: Plot the Speaker
+
+
+for (const d of speakerCounts) {
+  const date = new Date(d.date);
+  d.x1 = date;
+  d.x2 = new Date(date);
+  d.x2.setDate(date.getDate() + 1); // one-day-wide bar
+}
+
+display(Plot.plot({
+  title: `Unique speakers mentioning "${wordsSingle}" per day during ${selectedTimePeriod.name}`,
+  width: width,
+  height: 400,
+  x: {
+    type: "time",
+    label: "Date",
+    grid: true
+  },
+  y: {
+    label: "Unique Speaker Count",
+    grid: true
+  },
+  color: {
+    type: "categorical",
+    scheme: "Set2",
+    domain: activeParties,
+    legend: true
+  },
+  marks: [
+    Plot.rectY(speakerCounts, {
+      x1: "x1",
+      x2: "x2",
+      y: "count",
+      fill: "party",
+      tip: true
+    })
+  ]
+}));
+
 ```
 
 </div>
