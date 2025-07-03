@@ -8,7 +8,7 @@ theme: ["cotton", "wide"]
 const hansardRightsFile = FileAttachment("./data/hansard_rights.csv");
 const timePeriodsFile = FileAttachment("./data/time_periods.csv");
 const coerceHansardRow = (d) => ({"date": d.date, "party": (d.party === null ? "N/A" : d.party.toString()), "speaker": (d.speaker === null ? "N/A" : d.speaker.toString()), "rights": (d.rights === null ? "" : d.rights.toString()), "context": (d.context === null ? "" : d.context.toString())});
-const hansardRights = hansardRightsFile.csv({typed: true}).then((D) => D.map(coerceHansardRow));    
+const hansardRights = hansardRightsFile.csv({typed: true}).then((D) => D.map(coerceHansardRow)); 
 const defaultTimePeriods = timePeriodsFile.csv({typed: true});
 ```
 
@@ -162,6 +162,7 @@ function padInt(intValue, numPadChars) {
 
 const countMap = new Map();
 const speakerSetMap = new Map();
+const speakerPartyMap = new Map();
 let entryDate;
 let formattedDate;
 let currKey;
@@ -205,15 +206,32 @@ for (const [key, value] of countMap) {
     hansardCounts.push(rowObj);
 }
 
-// const speakerCounts = [];
-// for (const [key, speakerSet] of speakerSetMap.entries()) {
-//   const [dateStr, party] = key.split(":");
-//   speakerCounts.push({
-//     date: new Date(dateStr),
-//     party: party,
-//     count: speakerSet.size
-//   });
+const speakerCounts = [];
+for (const [key, speakerSet] of speakerSetMap.entries()) {
+  let currDateStr;
+  let currDate;
+  let currParty;
+  currDateStr = key.split(":").at(0);
+  currDate = new Date(currDateStr);
+  if ((currDate < startDate) || (currDate > endDate)) {
+    continue;
+  }
+  currParty = key.split(":").at(1);
+  speakerCounts.push({date: currDate, party: currParty, count: speakerSet.size});
+
+  if (!speakerPartyMap.has(currParty)){
+        speakerPartyMap.set(currParty, new Set())
+    }
+    for (const s of speakerSet){
+        speakerPartyMap.get(currParty).add(s)
+    }
+}
+
+// const speakerPartyCounts = [];
+// for (const [key, speakerSet]of speakerPartyMap.entries()) {
+//     speakerPartyCounts.push({party: key, count: speakerSet.size})
 // }
+
 ```
 
 ```js
@@ -226,7 +244,7 @@ const meanSumToggle = view(Inputs.radio(["mean", "sum"], {label: "Rolling mean/r
 
 ```js
 display(Plot.plot({
-    title: `"${wordsSingle}" rights mentioned by party on a rolling ${windowK} day count`,
+    title: `"${wordsSingle}" rights mentioned by party on a rolling ${windowK} day count  during ${selectedTimePeriod.name}`,
     width: width,
     x: {
         type: "time",
@@ -247,46 +265,18 @@ display(Plot.plot({
 }));
 ```
 
-<!-- ```js
-display(Plot.plot({
-    title: `Number of speakers mentioned "${wordsSingle}" rights by party on a rolling ${windowK} day count`,
-    width: width,
-    x: {
-        type: "time",
-        grid: true
-    },
-    y: {
-        label: meanSumToggle
-    },
-    color: {
-        type: "categorical",
-        scheme: "Set2",
-        domain: activeParties,
-        legend: true
-    },
-    marks: [
-        Plot.lineY(hansardCounts, Plot.windowY({ k: windowK, reduce: meanSumToggle, x: "date", y: "count", stroke: "party", tip: true }))
-    ]
-}));
-``` -->
+```js
+
+html`<pre>${Array.from(speakerPartyMap.entries())
+  .sort((a, b) => b[1].size - a[1].size) // descending by size
+  .map(([party, speakers]) =>
+    `${party.padEnd(20)} ${speakers.size.toString().padStart(3)} unique speakers`
+  ).join("\n")}</pre>`
+```
 
 ```js
 // Step 4: Plot the Speaker
 
-const speakerCounts = [];
-for (const [key, speakerSet] of speakerSetMap.entries()) {
-  let currDateStr;
-  let currDate;
-  let currParty;
-  currDateStr = key.split(":").at(0);
-  currDate = new Date(currDateStr);
-  if ((currDate < startDate) || (currDate > endDate)) {
-    continue;
-  }
-  currParty = key.split(":").at(1);
-  //rowObj = {date: currDateStr, party: currParty, count: value};
-  speakerCounts.push({date: currDate, party: currParty, count: speakerSet.size});
-}
 
 for (const d of speakerCounts) {
   const date = new Date(d.date);
@@ -296,7 +286,7 @@ for (const d of speakerCounts) {
 }
 
 display(Plot.plot({
-  title: `Unique speakers mentioning "${wordsSingle}" per day by party`,
+  title: `Unique speakers mentioning "${wordsSingle}" per day by party during ${selectedTimePeriod.name}`,
   width: width,
   height: 400,
   x: {
