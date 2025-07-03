@@ -162,7 +162,6 @@ function padInt(intValue, numPadChars) {
 
 const countMap = new Map();
 const speakerSetMap = new Map();
-const speakerPartyMap = new Map();
 let entryDate;
 let formattedDate;
 let currKey;
@@ -170,7 +169,7 @@ for (let currParty of partySelection) {
     entryDate = new Date(earliestDate.valueOf());
     while (entryDate <= latestDate) {
         let formattedDate = `${padInt(entryDate.getUTCFullYear(), 4)}-${padInt(entryDate.getMonth()+1, 2)}-${padInt(entryDate.getDate(), 2)}`
-        currKey = `${formattedDate}:${currParty}`;
+        currKey = `${formattedDate}:${currParty}`; // Create keys of all dates-parties combination
         countMap.set(currKey, 0);
         speakerSetMap.set(currKey, new Set());
         entryDate.setDate(entryDate.getDate() + 1);
@@ -206,6 +205,7 @@ for (const [key, value] of countMap) {
     hansardCounts.push(rowObj);
 }
 
+const speakerPartyMap = new Map();
 const speakerCounts = [];
 for (const [key, speakerSet] of speakerSetMap.entries()) {
   let currDateStr;
@@ -219,19 +219,15 @@ for (const [key, speakerSet] of speakerSetMap.entries()) {
   currParty = key.split(":").at(1);
   speakerCounts.push({date: currDate, party: currParty, count: speakerSet.size});
 
-  if (!speakerPartyMap.has(currParty)){
-        speakerPartyMap.set(currParty, new Set())
+  if (!speakerPartyMap.has(currParty) && speakerSet.size > 0){
+        speakerPartyMap.set(currParty, new Set());
     }
-    for (const s of speakerSet){
-        speakerPartyMap.get(currParty).add(s)
+    if (speakerPartyMap.has(currParty) && speakerSet.size > 0) {
+        for (const s of speakerSet){
+            speakerPartyMap.get(currParty).add(s);
+        }   
     }
 }
-
-// const speakerPartyCounts = [];
-// for (const [key, speakerSet]of speakerPartyMap.entries()) {
-//     speakerPartyCounts.push({party: key, count: speakerSet.size})
-// }
-
 ```
 
 ```js
@@ -267,7 +263,8 @@ display(Plot.plot({
 
 ```js
 
-html`<pre>${Array.from(speakerPartyMap.entries())
+html`Number of unique speakers mentioned "${wordsSingle}" during ministry of ${selectedTimePeriod.name}
+    <pre>${Array.from(speakerPartyMap.entries())
   .sort((a, b) => b[1].size - a[1].size) // descending by size
   .map(([party, speakers]) =>
     `${party.padEnd(20)} ${speakers.size.toString().padStart(3)} unique speakers`
@@ -286,7 +283,7 @@ for (const d of speakerCounts) {
 }
 
 display(Plot.plot({
-  title: `Unique speakers mentioning "${wordsSingle}" per day by party during ${selectedTimePeriod.name}`,
+  title: `Unique speakers mentioning "${wordsSingle}" per day during ${selectedTimePeriod.name}`,
   width: width,
   height: 400,
   x: {
