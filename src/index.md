@@ -205,15 +205,15 @@ for (const [key, value] of countMap) {
     hansardCounts.push(rowObj);
 }
 
-const speakerCounts = [];
-for (const [key, speakerSet] of speakerSetMap.entries()) {
-  const [dateStr, party] = key.split(":");
-  speakerCounts.push({
-    date: new Date(dateStr),
-    party: party,
-    count: speakerSet.size
-  });
-}
+// const speakerCounts = [];
+// for (const [key, speakerSet] of speakerSetMap.entries()) {
+//   const [dateStr, party] = key.split(":");
+//   speakerCounts.push({
+//     date: new Date(dateStr),
+//     party: party,
+//     count: speakerSet.size
+//   });
+// }
 ```
 
 ```js
@@ -247,7 +247,7 @@ display(Plot.plot({
 }));
 ```
 
-```js
+<!-- ```js
 display(Plot.plot({
     title: `Number of speakers mentioned "${wordsSingle}" rights by party on a rolling ${windowK} day count`,
     width: width,
@@ -268,15 +268,46 @@ display(Plot.plot({
         Plot.lineY(hansardCounts, Plot.windowY({ k: windowK, reduce: meanSumToggle, x: "date", y: "count", stroke: "party", tip: true }))
     ]
 }));
-```
+``` -->
 
 ```js
-// Step 4: Plot the result
+// Step 4: Plot the Speaker
+
+const speakerCounts = [];
+for (const [key, speakerSet] of speakerSetMap.entries()) {
+  let currDateStr;
+  let currDate;
+  let currParty;
+  currDateStr = key.split(":").at(0);
+  currDate = new Date(currDateStr);
+  if ((currDate < startDate) || (currDate > endDate)) {
+    continue;
+  }
+  currParty = key.split(":").at(1);
+  //rowObj = {date: currDateStr, party: currParty, count: value};
+  speakerCounts.push({date: currDate, party: currParty, count: speakerSet.size});
+}
+
+for (const d of speakerCounts) {
+  const date = new Date(d.date);
+  d.x1 = date;
+  d.x2 = new Date(date);
+  d.x2.setDate(date.getDate() + 1); // one-day-wide bar
+}
+
 display(Plot.plot({
-  title: `Unique speakers mentioning "${wordsSingle}" by party on a rolling ${windowK} day count`,
+  title: `Unique speakers mentioning "${wordsSingle}" per day by party`,
   width: width,
-  x: { type: "time", grid: true },
-  y: { label: "Unique Speaker Count" },
+  height: 400,
+  x: {
+    type: "time",
+    label: "Date",
+    grid: true
+  },
+  y: {
+    label: "Unique Speaker Count",
+    grid: true
+  },
   color: {
     type: "categorical",
     scheme: "Set2",
@@ -284,16 +315,16 @@ display(Plot.plot({
     legend: true
   },
   marks: [
-    Plot.lineY(speakerCounts, Plot.windowY({
-      k: windowK,
-      reduce: "mean", // or "sum" depending on your toggle
-      x: "date",
+    Plot.rectY(speakerCounts, {
+      x1: "x1",
+      x2: "x2",
       y: "count",
-      stroke: "party",
+      fill: "party",
       tip: true
-    }))
+    })
   ]
 }));
+
 ```
 
 </div>
