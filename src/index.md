@@ -7,9 +7,37 @@ theme: ["cotton", "wide"]
 ```js
 const hansardRightsFile = FileAttachment("./data/hansard_rights.csv");
 const timePeriodsFile = FileAttachment("./data/time_periods.csv");
+const parliamentSizeFile = FileAttachment("./data/parliament_size.csv");
 const coerceHansardRow = (d) => ({"date": d.date, "party": (d.party === null ? "N/A" : d.party.toString()), "speaker": (d.speaker === null ? "N/A" : d.speaker.toString()), "rights": (d.rights === null ? "" : d.rights.toString()), "context": (d.context === null ? "" : d.context.toString())});
 const hansardRights = hansardRightsFile.csv({typed: true}).then((D) => D.map(coerceHansardRow)); 
 const defaultTimePeriods = timePeriodsFile.csv({typed: true});
+
+const parliamentSizePromise = parliamentSizeFile.csv().then(data => {
+    const parseDate = (dateString) => {
+        const parts = dateString.split('/');
+        return new Date(parts[2], parts[1] - 1, parts[0]);
+    };
+
+    return data.map((d, i) => {
+        const startDate = parseDate(d["Election date"]);
+        let endDate;
+        if (i + 1 < data.length) {
+            endDate = parseDate(data[i+1]["Election date"]);
+            endDate.setDate(endDate.getDate() - 1);
+        } else {
+            endDate = new Date("2099-12-31");
+        }
+        return {
+            ...d,
+            start_date: startDate,
+            end_date: endDate,
+            "Con": +d["Conservative Party"],
+            "Lab": +d["Labour Party"],
+            "LibDem": +d["LibDem"]
+        };
+    });
+});
+
 ```
 
 ```js
@@ -205,8 +233,10 @@ for (const [key, value] of countMap) {
     hansardCounts.push(rowObj);
 }
 
-const speakerPartyMap = new Map();
+const parliamentSize = await parliamentSizePromise;
 const speakerCounts = [];
+const speakerProportions = [];
+const speakerPartyMap = new Map();
 for (const [key, speakerSet] of speakerSetMap.entries()) {
   let currDateStr;
   let currDate;
@@ -217,15 +247,39 @@ for (const [key, speakerSet] of speakerSetMap.entries()) {
     continue;
   }
   currParty = key.split(":").at(1);
-  speakerCounts.push({date: currDate, party: currParty, count: speakerSet.size});
+  const count = speakerSet.size;
+  speakerCounts.push({date: currDate, party: currParty, count: count});
 
-  if (!speakerPartyMap.has(currParty) && speakerSet.size > 0){
+  if (!speakerPartyMap.has(currParty) && count > 0){
         speakerPartyMap.set(currParty, new Set());
     }
-    if (speakerPartyMap.has(currParty) && speakerSet.size > 0) {
+    if (speakerPartyMap.has(currParty) && count > 0) {
         for (const s of speakerSet){
             speakerPartyMap.get(currParty).add(s);
         }   
+    }
+    
+    let partySize = 0;
+    const parliamentPeriod = parliamentSize.find(p => currDate >= p.start_date && currDate <= p.end_date);
+
+    if (parliamentPeriod && Object.keys(parliamentPeriod).includes(currParty)) {
+        partySize = parliamentPeriod[currParty];
+    }
+
+    if (partySize > 0) {
+        speakerProportions.push({
+            date: currDate,
+            party: currParty,
+            proportion: count / partySize,
+            count: count
+        });
+    } else {
+        speakerProportions.push({
+            date: currDate,
+            party: currParty,
+            proportion: 0,
+            count: count
+        });
     }
 }
 ```
@@ -274,16 +328,8 @@ html`Number of unique speakers mentioned "${wordsSingle}" during ministry of ${s
 ```js
 // Step 4: Plot the Speaker
 
-
-for (const d of speakerCounts) {
-  const date = new Date(d.date);
-  d.x1 = date;
-  d.x2 = new Date(date);
-  d.x2.setDate(date.getDate() + 1); // one-day-wide bar
-}
-
 display(Plot.plot({
-  title: `Unique speakers mentioning "${wordsSingle}" per day during ${selectedTimePeriod.name}`,
+  title: `Proportion of unique speakers mentioning "${wordsSingle}" per day during ${selectedTimePeriod.name}`,
   width: width,
   height: 400,
   x: {
@@ -292,8 +338,9 @@ display(Plot.plot({
     grid: true
   },
   y: {
-    label: "Unique Speaker Count",
-    grid: true
+    label: "Proportion of Unique Speakers",
+    grid: true,
+    tickFormat: ".1%"
   },
   color: {
     type: "categorical",
@@ -302,10 +349,10 @@ display(Plot.plot({
     legend: true
   },
   marks: [
-    Plot.rectY(speakerCounts, {
-      x1: "x1",
-      x2: "x2",
-      y: "count",
+    Plot.rectY(speakerProportions, {
+      x: "date",
+      interval: "day",
+      y: "proportion",
       fill: "party",
       tip: true
     })
