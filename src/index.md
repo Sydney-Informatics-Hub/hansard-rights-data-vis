@@ -174,7 +174,7 @@ display(Plot.plot({
 <div class="card" >
 
 ```js
-const activeParties = view(Inputs.select(partySelection.slice(1), { label: "Parties", value: ["Lab", "Con"], multiple: 3 }));
+const activeParties = view(Inputs.select(partySelection.slice(1), { label: "Parties", value: ["Lab", "Con", "LibDem"], multiple: 3 }));
 ```
 
 ```js
@@ -285,7 +285,7 @@ for (const [key, speakerSet] of speakerSetMap.entries()) {
 ```
 
 ```js
-const windowK = view(Inputs.range([1, 730], { value: 365, step: 1, label: "Rolling average window (days)"}));
+const windowK = view(Inputs.range([1, 730], { value: 1, step: 1, label: "Rolling average window (days)"}));
 ```
 
 ```js
@@ -354,6 +354,9 @@ display(Plot.plot({
       interval: "day",
       y: "proportion",
       fill: "party",
+      channels: {
+        "Unique Speakers": "count"
+      },
       tip: true
     })
   ]
