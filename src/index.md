@@ -271,14 +271,16 @@ for (const [key, speakerSet] of speakerSetMap.entries()) {
             date: currDate,
             party: currParty,
             proportion: count / partySize,
-            count: count
+            count: count,
+            partySize: partySize
         });
     } else {
         speakerProportions.push({
             date: currDate,
             party: currParty,
             proportion: 0,
-            count: count
+            count: count,
+            partySize: 0
         });
     }
 }
@@ -355,9 +357,17 @@ display(Plot.plot({
       y: "proportion",
       fill: "party",
       channels: {
-        "Unique Speakers": "count"
+        "Unique Speakers": "count",
+        "Party Size": "partySize"
       },
-      tip: true
+      tip: {
+        format: {
+          y: false,
+          y: ".1%",
+          "Unique Speakers": "d",
+          "Party Size": "d"
+        }
+      }
     })
   ]
 }));
