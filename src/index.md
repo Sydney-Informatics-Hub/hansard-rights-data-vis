@@ -7,9 +7,37 @@ theme: ["cotton", "wide"]
 ```js
 const hansardRightsFile = FileAttachment("./data/hansard_rights.csv");
 const timePeriodsFile = FileAttachment("./data/time_periods.csv");
+const parliamentSizeFile = FileAttachment("./data/parliament_size.csv");
 const coerceHansardRow = (d) => ({"date": d.date, "party": (d.party === null ? "N/A" : d.party.toString()), "speaker": (d.speaker === null ? "N/A" : d.speaker.toString()), "rights": (d.rights === null ? "" : d.rights.toString()), "context": (d.context === null ? "" : d.context.toString())});
 const hansardRights = hansardRightsFile.csv({typed: true}).then((D) => D.map(coerceHansardRow)); 
 const defaultTimePeriods = timePeriodsFile.csv({typed: true});
+
+const parliamentSizePromise = parliamentSizeFile.csv().then(data => {
+    const parseDate = (dateString) => {
+        const parts = dateString.split('/');
+        return new Date(parts[2], parts[1] - 1, parts[0]);
+    };
+
+    return data.map((d, i) => {
+        const startDate = parseDate(d["Election date"]);
+        let endDate;
+        if (i + 1 < data.length) {
+            endDate = parseDate(data[i+1]["Election date"]);
+            endDate.setDate(endDate.getDate() - 1);
+        } else {
+            endDate = new Date("2099-12-31");
+        }
+        return {
+            ...d,
+            start_date: startDate,
+            end_date: endDate,
+            "Con": +d["Conservative Party"],
+            "Lab": +d["Labour Party"],
+            "LibDem": +d["LibDem"]
+        };
+    });
+});
+
 ```
 
 ```js
@@ -146,7 +174,7 @@ display(Plot.plot({
 <div class="card" >
 
 ```js
-const activeParties = view(Inputs.select(partySelection.slice(1), { label: "Parties", value: ["Lab", "Con"], multiple: 3 }));
+const activeParties = view(Inputs.select(partySelection.slice(1), { label: "Parties", value: ["Lab", "Con", "LibDem"], multiple: 3 }));
 ```
 
 ```js
@@ -205,8 +233,10 @@ for (const [key, value] of countMap) {
     hansardCounts.push(rowObj);
 }
 
-const speakerPartyMap = new Map();
+const parliamentSize = await parliamentSizePromise;
 const speakerCounts = [];
+const speakerProportions = [];
+const speakerPartyMap = new Map();
 for (const [key, speakerSet] of speakerSetMap.entries()) {
   let currDateStr;
   let currDate;
@@ -217,21 +247,47 @@ for (const [key, speakerSet] of speakerSetMap.entries()) {
     continue;
   }
   currParty = key.split(":").at(1);
-  speakerCounts.push({date: currDate, party: currParty, count: speakerSet.size});
+  const count = speakerSet.size;
+  speakerCounts.push({date: currDate, party: currParty, count: count});
 
-  if (!speakerPartyMap.has(currParty) && speakerSet.size > 0){
+  if (!speakerPartyMap.has(currParty) && count > 0){
         speakerPartyMap.set(currParty, new Set());
     }
-    if (speakerPartyMap.has(currParty) && speakerSet.size > 0) {
+    if (speakerPartyMap.has(currParty) && count > 0) {
         for (const s of speakerSet){
             speakerPartyMap.get(currParty).add(s);
         }   
+    }
+    
+    let partySize = 0;
+    const parliamentPeriod = parliamentSize.find(p => currDate >= p.start_date && currDate <= p.end_date);
+
+    if (parliamentPeriod && Object.keys(parliamentPeriod).includes(currParty)) {
+        partySize = parliamentPeriod[currParty];
+    }
+
+    if (partySize > 0) {
+        speakerProportions.push({
+            date: currDate,
+            party: currParty,
+            proportion: count / partySize,
+            count: count,
+            partySize: partySize
+        });
+    } else {
+        speakerProportions.push({
+            date: currDate,
+            party: currParty,
+            proportion: 0,
+            count: count,
+            partySize: 0
+        });
     }
 }
 ```
 
 ```js
-const windowK = view(Inputs.range([1, 730], { value: 365, step: 1, label: "Rolling average window (days)"}));
+const windowK = view(Inputs.range([1, 730], { value: 1, step: 1, label: "Rolling average window (days)"}));
 ```
 
 ```js
@@ -261,6 +317,98 @@ display(Plot.plot({
 }));
 ```
 
+
+```js
+// Step 4: Plot the Speaker
+
+display(Plot.plot({
+  title: `Proportion of unique speakers mentioning "${wordsSingle}" rights per day during ${selectedTimePeriod.name}`,
+  width: width,
+  height: 400,
+  x: {
+    type: "time",
+    label: "Date",
+    grid: true
+  },
+  y: {
+    label: "Proportion of Unique Speakers",
+    grid: true,
+    tickFormat: ".1%"
+  },
+  color: {
+    type: "categorical",
+    scheme: "Set2",
+    domain: activeParties,
+    legend: true
+  },
+  marks: [
+    Plot.lineY(windowedSpeakerProportions, {
+        x: "date",
+        y: "proportion",
+        stroke: "party",
+        tip: {
+          format: {
+            y: ".1%",
+            "Total Speakers": "d",
+            "Avg Party Size": ".1f",
+            party: true,
+            date: true
+          },
+          channels: {
+            "Total Speakers": {value: "totalSpeakers", label: "Total Speakers (window)"},
+            "Avg Party Size": {value: "avgPartySize", label: "Avg Party Size (window)"}
+          }
+        }
+    })
+  ]
+}));
+```
+
+```js
+const windowedSpeakerProportions = [];
+if (speakerProportions.length > 0) {
+    const groupedByParty = d3.group(speakerProportions.filter(d => activeParties.includes(d.party)), d => d.party);
+
+    for (const [party, partyData] of groupedByParty) {
+        partyData.sort((a, b) => a.date - b.date); // ensure data is sorted by date
+
+        const dates = partyData.map(d => d.date);
+        const counts = partyData.map(d => d.count);
+        const partySizes = partyData.map(d => d.partySize);
+        const proportions = partyData.map(d => d.proportion);
+
+        const rollingSum = (arr) => d3.cumsum(arr);
+        const rollingSumCounts = rollingSum(counts);
+        const rollingSumPartySizes = rollingSum(partySizes);
+        const rollingSumProportions = rollingSum(proportions);
+
+        for (let i = 0; i < partyData.length; i++) {
+            const start = Math.max(0, i - windowK + 1);
+            const windowSize = i - start + 1;
+
+            const totalSpeakers = rollingSumCounts[i] - (start > 0 ? rollingSumCounts[start - 1] : 0);
+            const totalMPs = rollingSumPartySizes[i] - (start > 0 ? rollingSumPartySizes[start - 1] : 0);
+            const sumProportion = rollingSumProportions[i] - (start > 0 ? rollingSumProportions[start - 1] : 0);
+            
+            let finalProportion;
+            if (meanSumToggle === "mean") {
+                finalProportion = sumProportion / windowSize;
+            } else { // "sum" in this context will be the overall proportion over the window
+                finalProportion = totalMPs > 0 ? totalSpeakers / totalMPs : 0;
+            }
+
+            windowedSpeakerProportions.push({
+                date: dates[i],
+                party: party,
+                proportion: finalProportion,
+                totalSpeakers: totalSpeakers,
+                avgPartySize: totalMPs / windowSize
+            });
+        }
+    }
+}
+```
+
 ```js
 
 html`Number of unique speakers mentioned "${wordsSingle}" during ministry of ${selectedTimePeriod.name}
@@ -271,19 +419,11 @@ html`Number of unique speakers mentioned "${wordsSingle}" during ministry of ${s
   ).join("\n")}</pre>`
 ```
 
-```js
+<!-- ```js
 // Step 4: Plot the Speaker
 
-
-for (const d of speakerCounts) {
-  const date = new Date(d.date);
-  d.x1 = date;
-  d.x2 = new Date(date);
-  d.x2.setDate(date.getDate() + 1); // one-day-wide bar
-}
-
 display(Plot.plot({
-  title: `Unique speakers mentioning "${wordsSingle}" per day during ${selectedTimePeriod.name}`,
+  title: `Proportion of unique speakers mentioning "${wordsSingle}" per day during ${selectedTimePeriod.name}`,
   width: width,
   height: 400,
   x: {
@@ -292,8 +432,9 @@ display(Plot.plot({
     grid: true
   },
   y: {
-    label: "Unique Speaker Count",
-    grid: true
+    label: "Proportion of Unique Speakers",
+    grid: true,
+    tickFormat: ".1%"
   },
   color: {
     type: "categorical",
@@ -302,17 +443,10 @@ display(Plot.plot({
     legend: true
   },
   marks: [
-    Plot.rectY(speakerCounts, {
-      x1: "x1",
-      x2: "x2",
-      y: "count",
-      fill: "party",
-      tip: true
-    })
+    Plot.lineY(windowedSpeakerProportions, Plot.windowY({ k: windowK, reduce: meanSumToggle, x: "date", y: "proportion", stroke: "party", tip: true }))
   ]
 }));
-
-```
+``` -->
 
 </div>
 
