@@ -318,20 +318,10 @@ display(Plot.plot({
 ```
 
 ```js
-
-html`Number of unique speakers mentioned "${wordsSingle}" during ministry of ${selectedTimePeriod.name}
-    <pre>${Array.from(speakerPartyMap.entries())
-  .sort((a, b) => b[1].size - a[1].size) // descending by size
-  .map(([party, speakers]) =>
-    `${party.padEnd(20)} ${speakers.size.toString().padStart(3)} unique speakers`
-  ).join("\n")}</pre>`
-```
-
-```js
 // Step 4: Plot the Speaker
 
 display(Plot.plot({
-  title: `Proportion of unique speakers mentioning "${wordsSingle}" per day during ${selectedTimePeriod.name}`,
+  title: `Proportion of unique speakers mentioning "${wordsSingle}" rights per day during ${selectedTimePeriod.name}`,
   width: width,
   height: 400,
   x: {
@@ -374,6 +364,7 @@ display(Plot.plot({
 ```
 
 ```js
+// Step 4: Plot the Speaker
 const windowedSpeakerProportions = [];
 if (speakerProportions.length > 0) {
     const groupedByParty = d3.group(speakerProportions.filter(d => activeParties.includes(d.party)), d => d.party);
@@ -419,7 +410,18 @@ if (speakerProportions.length > 0) {
 ```
 
 ```js
-// Step 4: Plot the Speaker
+
+html`Number of unique speakers mentioned "${wordsSingle}" rights during ministry of ${selectedTimePeriod.name}
+    <pre>${Array.from(speakerPartyMap.entries())
+  .sort((a, b) => b[1].size - a[1].size) // descending by size
+  .map(([party, speakers]) =>
+    `${party.padEnd(20)} ${speakers.size.toString().padStart(3)} unique speakers`
+  ).join("\n")}</pre>`
+```
+
+
+<!-- ```js
+
 
 display(Plot.plot({
   title: `Proportion of unique speakers mentioning "${wordsSingle}" per day during ${selectedTimePeriod.name}`,
@@ -445,7 +447,7 @@ display(Plot.plot({
     Plot.lineY(windowedSpeakerProportions, Plot.windowY({ k: windowK, reduce: meanSumToggle, x: "date", y: "proportion", stroke: "party", tip: true }))
   ]
 }));
-```
+``` -->
 
 </div>
 
