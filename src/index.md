@@ -351,10 +351,100 @@ display(Plot.plot({
     legend: true
   },
   marks: [
-    Plot.lineY(speakerProportions, Plot.windowY({ k: windowK, reduce: meanSumToggle, x: "date", y: "proportion", stroke: "party", tip: true }))
+    Plot.lineY(windowedSpeakerProportions, {
+        x: "date",
+        y: "proportion",
+        stroke: "party",
+        tip: {
+          format: {
+            y: ".1%",
+            "Total Speakers": "d",
+            "Avg Party Size": ".1f",
+            party: true,
+            date: true
+          },
+          channels: {
+            "Total Speakers": {value: "totalSpeakers", label: "Total Speakers (window)"},
+            "Avg Party Size": {value: "avgPartySize", label: "Avg Party Size (window)"}
+          }
+        }
+    })
   ]
 }));
+```
 
+```js
+const windowedSpeakerProportions = [];
+if (speakerProportions.length > 0) {
+    const groupedByParty = d3.group(speakerProportions.filter(d => activeParties.includes(d.party)), d => d.party);
+
+    for (const [party, partyData] of groupedByParty) {
+        partyData.sort((a, b) => a.date - b.date); // ensure data is sorted by date
+
+        const dates = partyData.map(d => d.date);
+        const counts = partyData.map(d => d.count);
+        const partySizes = partyData.map(d => d.partySize);
+        const proportions = partyData.map(d => d.proportion);
+
+        const rollingSum = (arr) => d3.cumsum(arr);
+        const rollingSumCounts = rollingSum(counts);
+        const rollingSumPartySizes = rollingSum(partySizes);
+        const rollingSumProportions = rollingSum(proportions);
+
+        for (let i = 0; i < partyData.length; i++) {
+            const start = Math.max(0, i - windowK + 1);
+            const windowSize = i - start + 1;
+
+            const totalSpeakers = rollingSumCounts[i] - (start > 0 ? rollingSumCounts[start - 1] : 0);
+            const totalMPs = rollingSumPartySizes[i] - (start > 0 ? rollingSumPartySizes[start - 1] : 0);
+            const sumProportion = rollingSumProportions[i] - (start > 0 ? rollingSumProportions[start - 1] : 0);
+            
+            let finalProportion;
+            if (meanSumToggle === "mean") {
+                finalProportion = sumProportion / windowSize;
+            } else { // "sum" in this context will be the overall proportion over the window
+                finalProportion = totalMPs > 0 ? totalSpeakers / totalMPs : 0;
+            }
+
+            windowedSpeakerProportions.push({
+                date: dates[i],
+                party: party,
+                proportion: finalProportion,
+                totalSpeakers: totalSpeakers,
+                avgPartySize: totalMPs / windowSize
+            });
+        }
+    }
+}
+```
+
+```js
+// Step 4: Plot the Speaker
+
+display(Plot.plot({
+  title: `Proportion of unique speakers mentioning "${wordsSingle}" per day during ${selectedTimePeriod.name}`,
+  width: width,
+  height: 400,
+  x: {
+    type: "time",
+    label: "Date",
+    grid: true
+  },
+  y: {
+    label: "Proportion of Unique Speakers",
+    grid: true,
+    tickFormat: ".1%"
+  },
+  color: {
+    type: "categorical",
+    scheme: "Set2",
+    domain: activeParties,
+    legend: true
+  },
+  marks: [
+    Plot.lineY(windowedSpeakerProportions, Plot.windowY({ k: windowK, reduce: meanSumToggle, x: "date", y: "proportion", stroke: "party", tip: true }))
+  ]
+}));
 ```
 
 </div>
