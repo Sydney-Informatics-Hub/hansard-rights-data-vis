@@ -351,24 +351,7 @@ display(Plot.plot({
     legend: true
   },
   marks: [
-    Plot.rectY(speakerProportions, {
-      x: "date",
-      interval: "day",
-      y: "proportion",
-      fill: "party",
-      channels: {
-        "Unique Speakers": "count",
-        "Party Size": "partySize"
-      },
-      tip: {
-        format: {
-          y: false,
-          y: ".1%",
-          "Unique Speakers": "d",
-          "Party Size": "d"
-        }
-      }
-    })
+    Plot.lineY(speakerProportions, Plot.windowY({ k: windowK, reduce: meanSumToggle, x: "date", y: "proportion", stroke: "party", tip: true }))
   ]
 }));
 
