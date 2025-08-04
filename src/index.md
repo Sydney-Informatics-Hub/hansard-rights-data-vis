@@ -317,6 +317,7 @@ display(Plot.plot({
 }));
 ```
 
+
 ```js
 // Step 4: Plot the Speaker
 
@@ -364,7 +365,6 @@ display(Plot.plot({
 ```
 
 ```js
-// Step 4: Plot the Speaker
 const windowedSpeakerProportions = [];
 if (speakerProportions.length > 0) {
     const groupedByParty = d3.group(speakerProportions.filter(d => activeParties.includes(d.party)), d => d.party);
@@ -411,7 +411,7 @@ if (speakerProportions.length > 0) {
 
 ```js
 
-html`Number of unique speakers mentioned "${wordsSingle}" rights during ministry of ${selectedTimePeriod.name}
+html`Number of unique speakers mentioned "${wordsSingle}" during ministry of ${selectedTimePeriod.name}
     <pre>${Array.from(speakerPartyMap.entries())
   .sort((a, b) => b[1].size - a[1].size) // descending by size
   .map(([party, speakers]) =>
@@ -419,9 +419,8 @@ html`Number of unique speakers mentioned "${wordsSingle}" rights during ministry
   ).join("\n")}</pre>`
 ```
 
-
 <!-- ```js
-
+// Step 4: Plot the Speaker
 
 display(Plot.plot({
   title: `Proportion of unique speakers mentioning "${wordsSingle}" per day during ${selectedTimePeriod.name}`,
