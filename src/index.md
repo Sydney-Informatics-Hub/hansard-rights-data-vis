@@ -8,7 +8,17 @@ theme: ["cotton", "wide"]
 const hansardRightsFile = FileAttachment("./data/hansard_rights.csv");
 const timePeriodsFile = FileAttachment("./data/time_periods.csv");
 const parliamentSizeFile = FileAttachment("./data/parliament_size.csv");
-const coerceHansardRow = (d) => ({"date": d.date, "party": (d.party === null ? "N/A" : d.party.toString()), "speaker": (d.speaker === null ? "N/A" : d.speaker.toString()), "rights": (d.rights === null ? "" : d.rights.toString()), "context": (d.context === null ? "" : d.context.toString())});
+// Include agenda metadata columns so later summaries (first speaker per debate) can be computed.
+const coerceHansardRow = (d) => ({
+    "date": d.date,
+    "party": (d.party === null ? "N/A" : d.party.toString()),
+    "speaker": (d.speaker === null ? "N/A" : d.speaker.toString()),
+    "rights": (d.rights === null ? "" : d.rights.toString()),
+    "context": (d.context === null ? "" : d.context.toString()),
+    "agenda_id": d.agenda_id === null || d.agenda_id === undefined ? null : +d.agenda_id,
+    "agenda_title": d.agenda_title === null ? "" : d.agenda_title.toString(),
+    "agenda_speechnumber": d.agenda_speechnumber === null || d.agenda_speechnumber === undefined ? null : +d.agenda_speechnumber
+});
 const hansardRights = hansardRightsFile.csv({typed: true}).then((D) => D.map(coerceHansardRow)); 
 const defaultTimePeriods = timePeriodsFile.csv({typed: true});
 
@@ -322,7 +332,7 @@ display(Plot.plot({
 // Step 4: Plot the Speaker
 
 display(Plot.plot({
-  title: `Proportion of unique speakers mentioning "${wordsSingle}" rights per day during ${selectedTimePeriod.name}`,
+  title: `Proportion of unique speakers mentioning "${wordsSingle}" rights by individual parties per day during ${selectedTimePeriod.name}`,
   width: width,
   height: 400,
   x: {
@@ -410,43 +420,65 @@ if (speakerProportions.length > 0) {
 ```
 
 ```js
+// Step 5: Party summarisation table
+// Columns:
+// 1. Party
+// 2. Unique speakers mentioning the selected right (within date range)
+// 3. Count of debates where this party had the first speaker mentioning the selected right
+// 4. Unique speakers who have ever been that first speaker (subset of 3)
+// 5. Total unique speakers (any right) for that party in the selected period
+// 6. Percentage (Col4 / Col5)
 
-html`Number of unique speakers mentioned "${wordsSingle}" during ministry of ${selectedTimePeriod.name}
-    <pre>${Array.from(speakerPartyMap.entries())
-  .sort((a, b) => b[1].size - a[1].size) // descending by size
-  .map(([party, speakers]) =>
-    `${party.padEnd(20)} ${speakers.size.toString().padStart(3)} unique speakers`
-  ).join("\n")}</pre>`
+// Build a map of total unique speakers (any right) per party in date range
+const allSpeakersMap = new Map();
+for (const row of hansardRights) {
+    const rowDate = new Date(row.date);
+    if (rowDate < startDate || rowDate > endDate) continue;
+    if (!allSpeakersMap.has(row.party)) allSpeakersMap.set(row.party, new Set());
+    allSpeakersMap.get(row.party).add(row.speaker);
+}
+
+// Determine first speakers per debate (agenda) for the selected right
+const firstSpeakerCounts = new Map(); // party -> count of debates where first speaker from this party
+const firstSpeakerUniqueSpeakers = new Map(); // party -> Set of speakers who were first at least once
+
+// Group filtered rows (selected right, within date range) by (date + agenda_id)
+const filteredRightRows = hansardRights.filter(d => d.rights === wordsSingle && (new Date(d.date) >= startDate) && (new Date(d.date) <= endDate));
+const byDateAgenda = d3.group(filteredRightRows, d => d.date, d => d.agenda_id);
+
+for (const [dateKey, agendaMap] of byDateAgenda) {
+    for (const [agendaId, rows] of agendaMap) {
+        if (!rows || rows.length === 0) continue;
+        const minSpeechNum = d3.min(rows, r => r.agenda_speechnumber);
+        const firstRows = rows.filter(r => r.agenda_speechnumber === minSpeechNum);
+        for (const r of firstRows) {
+            firstSpeakerCounts.set(r.party, (firstSpeakerCounts.get(r.party) || 0) + 1);
+            if (!firstSpeakerUniqueSpeakers.has(r.party)) firstSpeakerUniqueSpeakers.set(r.party, new Set());
+            firstSpeakerUniqueSpeakers.get(r.party).add(r.speaker);
+        }
+    }
+}
+
+// Assemble rows for all parties (exclude the artificial 'All parties')
+const partySummaryRows = partySelection.slice(1).map(party => {
+    const uniqueSelectedRight = speakerPartyMap.has(party) ? speakerPartyMap.get(party).size : 0; // Col 2
+    const firstDebateMentions = firstSpeakerCounts.get(party) || 0; // Col 3
+    const uniqueFirstSpeakers = firstSpeakerUniqueSpeakers.has(party) ? firstSpeakerUniqueSpeakers.get(party).size : 0; // Col 4
+    const totalUniqueSpeakersAll = allSpeakersMap.has(party) ? allSpeakersMap.get(party).size : 0; // Col 5
+    const pct = totalUniqueSpeakersAll > 0 ? (uniqueFirstSpeakers / totalUniqueSpeakersAll) : 0;
+    return {
+        Party: party,
+        "Unique Speakers (selected right)": uniqueSelectedRight,
+        "First Speaker Debates": firstDebateMentions,
+        "Unique First Speakers": uniqueFirstSpeakers,
+        "Total Unique Speakers (all rights)": totalUniqueSpeakersAll,
+        "% MPs First Speakers": d3.format(".1%") (pct)
+    };
+});
+
+display(html`<h3>Party summary for "${wordsSingle}" during ${selectedTimePeriod.name}</h3>`);
+display(Inputs.table(partySummaryRows, {columns: ["Party","Unique Speakers (selected right)","First Speaker Debates","Unique First Speakers","Total Unique Speakers (all rights)","% MPs First Speakers"]}));
 ```
-
-<!-- ```js
-// Step 4: Plot the Speaker
-
-display(Plot.plot({
-  title: `Proportion of unique speakers mentioning "${wordsSingle}" per day during ${selectedTimePeriod.name}`,
-  width: width,
-  height: 400,
-  x: {
-    type: "time",
-    label: "Date",
-    grid: true
-  },
-  y: {
-    label: "Proportion of Unique Speakers",
-    grid: true,
-    tickFormat: ".1%"
-  },
-  color: {
-    type: "categorical",
-    scheme: "Set2",
-    domain: activeParties,
-    legend: true
-  },
-  marks: [
-    Plot.lineY(windowedSpeakerProportions, Plot.windowY({ k: windowK, reduce: meanSumToggle, x: "date", y: "proportion", stroke: "party", tip: true }))
-  ]
-}));
-``` -->
 
 </div>
 
