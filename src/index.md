@@ -487,6 +487,93 @@ display(Inputs.table(partySummaryRows, {columns: ["Party","Unique Speakers (sele
 
 <div class="card">
 
+## Human rights mentions by party and ministry
+
+Two cross-tabulation tables showing the likelihood of 'human rights' mentions by party across each ministry. The Third Thatcher ministry is excluded as the dataset does not cover its full duration; tables begin from the First Major ministry.
+
+**Table 1** – proportion of each party's MPs who mentioned 'human rights' at least once in the ministry (unique human-rights speakers ÷ average party size in seats).
+
+**Table 2** – proportion of human-rights debates where each party's MP was the first to mention it (debates with party X as first-mention ÷ total debates containing a human-rights mention).
+
+```js
+// Ministries for cross-tabulation: skip index 0 ("All ministries") and index 1 ("Third Thatcher ministry")
+const crossTabMinistries = defaultTimePeriods.slice(2);
+const crossTabParties = ["Lab", "Con", "LibDem"];
+const humanRightsOnlyRows = hansardRights.filter(d => d.rights === "human");
+
+// Short column labels: drop " ministry" to save horizontal space
+const ministryLabels = crossTabMinistries.map(m => m.name.replace(/\s+ministry/i, ""));
+
+// Average party seat count across all parliament-size periods that overlap a ministry window
+const avgPartySizeForMinistry = (party, mStart, mEnd, parlSizes) => {
+    const relevant = parlSizes.filter(p => p.end_date >= mStart && p.start_date <= mEnd);
+    return relevant.length ? d3.mean(relevant.map(p => p[party] || 0)) : 0;
+};
+
+// TABLE 1: proportion of party MPs who mentioned 'human rights' per ministry
+const table1Rows = crossTabParties.map(party => {
+    const row = { Party: party };
+    for (let i = 0; i < crossTabMinistries.length; i++) {
+        const m = crossTabMinistries[i];
+        const mStart = new Date(m.start_date);
+        const mEnd = new Date(m.end_date);
+        const partyHRRows = humanRightsOnlyRows.filter(d => {
+            const dDate = new Date(d.date);
+            return dDate >= mStart && dDate < mEnd && d.party === party;
+        });
+        const uniqueSpeakers = new Set(partyHRRows.map(d => d.speaker)).size;
+        const avgSize = avgPartySizeForMinistry(party, mStart, mEnd, parliamentSize);
+        row[ministryLabels[i]] = avgSize > 0 ? uniqueSpeakers / avgSize : 0;
+    }
+    return row;
+});
+
+// TABLE 2: proportion of human-rights debates where each party had the first mention per ministry
+const table2Rows = crossTabParties.map(party => {
+    const row = { Party: party };
+    for (let i = 0; i < crossTabMinistries.length; i++) {
+        const m = crossTabMinistries[i];
+        const mStart = new Date(m.start_date);
+        const mEnd = new Date(m.end_date);
+        const ministryHRRows = humanRightsOnlyRows.filter(d => {
+            const dDate = new Date(d.date);
+            return dDate >= mStart && dDate < mEnd;
+        });
+        const byDebate = d3.group(ministryHRRows, d => `${d.date}-${d.agenda_id}`);
+        let totalDebates = 0;
+        let partyFirstCount = 0;
+        for (const [, rows] of byDebate) {
+            if (!rows || rows.length === 0) continue;
+            totalDebates++;
+            const minSpeechNum = d3.min(rows, r => r.agenda_speechnumber);
+            if (rows.filter(r => r.agenda_speechnumber === minSpeechNum).some(r => r.party === party)) {
+                partyFirstCount++;
+            }
+        }
+        row[ministryLabels[i]] = totalDebates > 0 ? partyFirstCount / totalDebates : 0;
+    }
+    return row;
+});
+
+const pct = d3.format(".1%");
+const colFormats = Object.fromEntries(ministryLabels.map(l => [l, pct]));
+
+display(html`<h3>Table 1: Proportion of party MPs mentioning 'human rights' per ministry</h3>`);
+display(html`<p><em>Value = unique MPs from that party who mentioned 'human rights' ÷ average seats held by that party during the ministry.</em></p>`);
+display(Inputs.table(table1Rows, { columns: ["Party", ...ministryLabels], format: colFormats }));
+
+display(html`<h3>Table 2: Proportion of human-rights debates where each party made the first mention</h3>`);
+display(html`<p><em>Value = debates where that party's MP spoke first on 'human rights' ÷ total debates containing any 'human rights' mention in that ministry.</em></p>`);
+display(Inputs.table(table2Rows, { columns: ["Party", ...ministryLabels], format: colFormats }));
+```
+
+</div>
+
+
+
+
+<div class="card">
+
 <h2>Browse and download the data</h2>
 
 <p>The hansard data presented on this page can be downloaded <a id="hansardDataLink" download>here</a></p>
