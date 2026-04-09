@@ -496,9 +496,12 @@ Two cross-tabulation tables showing the likelihood of 'human rights' mentions by
 **Table 2** – proportion of human-rights debates where each party's MP was the first to mention it (debates with party X as first-mention ÷ total debates containing a human-rights mention).
 
 ```js
+const minHRMentions = view(Inputs.select(d3.range(1, 11), { value: 1, label: "Minimum number of times an MP must have mentioned 'human rights' within a ministry period to be counted (Table 1 only)" }));
+```
+
+```js
 // Ministries for cross-tabulation: skip index 0 ("All ministries") and index 1 ("Third Thatcher ministry")
 const crossTabMinistries = defaultTimePeriods.slice(2);
-const crossTabParties = ["Lab", "Con", "LibDem"];
 const humanRightsOnlyRows = hansardRights.filter(d => d.rights === "human");
 
 // Short column labels: drop " ministry" to save horizontal space
@@ -510,8 +513,13 @@ const avgPartySizeForMinistry = (party, mStart, mEnd, parlSizes) => {
     return relevant.length ? d3.mean(relevant.map(p => p[party] || 0)) : 0;
 };
 
+// TABLE 1 cell encoding:
+//   proportion (0–1)   → valid percentage
+//   -(integer)         → no seat-count data; absolute value is the raw unique-speaker count
+//   null               → below user threshold (or 0 speakers)
+
 // TABLE 1: proportion of party MPs who mentioned 'human rights' per ministry
-const table1Rows = crossTabParties.map(party => {
+const table1Rows = activeParties.map(party => {
     const row = { Party: party };
     for (let i = 0; i < crossTabMinistries.length; i++) {
         const m = crossTabMinistries[i];
@@ -521,15 +529,22 @@ const table1Rows = crossTabParties.map(party => {
             const dDate = new Date(d.date);
             return dDate >= mStart && dDate < mEnd && d.party === party;
         });
-        const uniqueSpeakers = new Set(partyHRRows.map(d => d.speaker)).size;
+        // Count mentions per speaker, then keep only those meeting the per-MP threshold
+        const mentionsBySpeaker = d3.rollup(partyHRRows, v => v.length, d => d.speaker);
+        const qualifyingSpeakers = [...mentionsBySpeaker.values()].filter(count => count >= minHRMentions).length;
         const avgSize = avgPartySizeForMinistry(party, mStart, mEnd, parliamentSize);
-        row[ministryLabels[i]] = avgSize > 0 ? uniqueSpeakers / avgSize : 0;
+        if (avgSize === 0) {
+            // No seat-count data: show raw qualifying count (or null if zero)
+            row[ministryLabels[i]] = qualifyingSpeakers > 0 ? -qualifyingSpeakers : null;
+        } else {
+            row[ministryLabels[i]] = qualifyingSpeakers > 0 ? qualifyingSpeakers / avgSize : null;
+        }
     }
     return row;
 });
 
 // TABLE 2: proportion of human-rights debates where each party had the first mention per ministry
-const table2Rows = crossTabParties.map(party => {
+const table2Rows = activeParties.map(party => {
     const row = { Party: party };
     for (let i = 0; i < crossTabMinistries.length; i++) {
         const m = crossTabMinistries[i];
@@ -555,11 +570,15 @@ const table2Rows = crossTabParties.map(party => {
     return row;
 });
 
-const pct = d3.format(".1%");
-const colFormats = Object.fromEntries(ministryLabels.map(l => [l, pct]));
+const fmtCell = val => {
+    if (val === null || val === undefined) return "";
+    if (val < 0) return `${-val} MPs†`; // raw count, no seat data
+    return d3.format(".1%")(val);
+};
+const colFormats = Object.fromEntries(ministryLabels.map(l => [l, fmtCell]));
 
 display(html`<h3>Table 1: Proportion of party MPs mentioning 'human rights' per ministry</h3>`);
-display(html`<p><em>Value = unique MPs from that party who mentioned 'human rights' ÷ average seats held by that party during the ministry.</em></p>`);
+display(html`<p><em>Value = MPs from that party who mentioned 'human rights' at least ${minHRMentions} time(s) in that ministry ÷ average seats held by that party during the ministry (Con, Lab, LibDem only). For all other parties no seat-count data is available, so the raw qualifying speaker count is shown instead (e.g. <strong>4 MPs†</strong>). Empty cells mean no MP met the threshold in that period.</em></p>`);
 display(Inputs.table(table1Rows, { columns: ["Party", ...ministryLabels], format: colFormats }));
 
 display(html`<h3>Table 2: Proportion of human-rights debates where each party made the first mention</h3>`);
