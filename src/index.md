@@ -28,6 +28,14 @@ const parliamentSizePromise = parliamentSizeFile.csv().then(data => {
         return new Date(parts[2], parts[1] - 1, parts[0]);
     };
 
+    // Rows are hand-maintained and not guaranteed chronological, but each row's
+    // end date is derived from the NEXT row — so sort by date first. The sort is
+    // stable: rows sharing a date keep file order, giving the earlier one a
+    // degenerate range (start > end) that never matches, so the later row —
+    // which reflects the cumulative seat state after all of that day's changes —
+    // owns the period.
+    data = [...data].sort((a, b) => parseDate(a["Election date"]) - parseDate(b["Election date"]));
+
     return data.map((d, i) => {
         const startDate = parseDate(d["Election date"]);
         let endDate;
