@@ -116,9 +116,13 @@ const minCount = view(Inputs.text({label: "Minimum count", type: 'number', value
 ```
 
 ```js
+// Inputs.text yields a string, so coerce before comparing. A blank or non-numeric entry
+// falls back to 0 (no filtering) rather than an accidental always-true comparison.
+const minCountValue = String(minCount).trim() !== "" && Number.isFinite(+minCount) ? Math.max(0, Math.floor(+minCount)) : 0;
+
 const hansardRightsDateFiltered = [];
 for (let row of hansardRights) {
-    if ((words.includes(row.rights)) && ((party === 'All parties') || (row.party === party)) && (new Date(row.date) >= startDate) && (new Date(row.date <= endDate))) {
+    if ((words.includes(row.rights)) && ((party === 'All parties') || (row.party === party)) && (new Date(row.date) >= startDate) && (new Date(row.date) <= endDate)) {
         hansardRightsDateFiltered.push(row);
     }
 }
@@ -128,7 +132,7 @@ for (let row of hansardRightsDateFiltered) {
     if (!rightsCountMap.has(row.rights)) {
         rightsCountMap.set(row.rights, hansardRightsDateFiltered.filter(d => (d.rights === row.rights)).length);
     }
-    if (rightsCountMap.get(row.rights) >= minCount) {
+    if (rightsCountMap.get(row.rights) >= minCountValue) {
         hansardRightsFiltered.push(row);
     }
 }
@@ -160,7 +164,7 @@ const numRightsTotal = new Set(hansardRightsFiltered.map(d => d.rights)).size;
 ```js
 display(Plot.plot({
     title: `Types of rights mentioned by ${party.toLowerCase()} between ${startDate.toDateString()} and ${endDate.toDateString()}`,
-    subtitle: `Total rights mentions: ${numRightsMentions}`,
+    subtitle: `Total rights mentions: ${numRightsMentions} · showing rights with at least ${minCountValue} mention(s) in range`,
     height: 40 + numRightsTotal * 20,
     width: width,
     marginLeft: 100,
