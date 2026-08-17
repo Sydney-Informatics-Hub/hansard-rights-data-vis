@@ -450,9 +450,14 @@ for (const [dateKey, agendaMap] of byDateAgenda) {
     for (const [agendaId, rows] of agendaMap) {
         if (!rows || rows.length === 0) continue;
         const minSpeechNum = d3.min(rows, r => r.agenda_speechnumber);
+        // firstRows holds one row PER MENTION within the first mentioning speech,
+        // so count the debate once per party, not once per row.
         const firstRows = rows.filter(r => r.agenda_speechnumber === minSpeechNum);
+        const firstParties = new Set(firstRows.map(r => r.party));
+        for (const p of firstParties) {
+            firstSpeakerCounts.set(p, (firstSpeakerCounts.get(p) || 0) + 1);
+        }
         for (const r of firstRows) {
-            firstSpeakerCounts.set(r.party, (firstSpeakerCounts.get(r.party) || 0) + 1);
             if (!firstSpeakerUniqueSpeakers.has(r.party)) firstSpeakerUniqueSpeakers.set(r.party, new Set());
             firstSpeakerUniqueSpeakers.get(r.party).add(r.speaker);
         }
